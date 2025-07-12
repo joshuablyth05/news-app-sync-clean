@@ -21,29 +21,98 @@ const anthropic = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
 const NEWSAPI_ENDPOINT = 'https://newsapi.org/v2/top-headlines';
 const MAX_PROMPT_CHARS = 8000;
 
-// RSS Sources
+// Available categories for AI tagging
+const AVAILABLE_CATEGORIES = {
+  Tech: [
+    'Artificial Intelligence (AI)',
+    'Machine Learning',
+    'Software Development',
+    'Cybersecurity',
+    'Cloud Computing',
+    'Gadgets & Devices',
+    'Startups & Innovation',
+    'Blockchain & Crypto',
+    'Mobile & Apps',
+    'Data Science',
+    'Web Development',
+    'Big Data',
+    'Robotics',
+    'AR/VR (Augmented/Virtual Reality)',
+    'Tech Policy & Regulation'
+  ],
+  Business: [
+    'Markets & Stocks',
+    'Finance & Investing',
+    'Leadership',
+    'Management',
+    'Marketing & Advertising',
+    'E-commerce',
+    'Mergers & Acquisitions',
+    'Small Business',
+    'Corporate Strategy',
+    'Economics',
+    'Real Estate',
+    'Human Resources',
+    'Supply Chain & Logistics',
+    'Sustainability & ESG (Environmental, Social, Governance)',
+    'Business Law'
+  ],
+  Entrepreneurship: [
+    'Startup Stories',
+    'Fundraising & Venture Capital',
+    'Pitching & Networking',
+    'Growth Hacking',
+    'Product Management',
+    'Bootstrapping',
+    'Founder Interviews',
+    'Incubators & Accelerators',
+    'Failure & Lessons Learned',
+    'Side Hustles',
+    'Remote Work & Digital Nomads'
+  ],
+  General: [
+    'World News',
+    'Politics',
+    'Science & Research',
+    'Health & Wellness',
+    'Education',
+    'Lifestyle',
+    'Opinion & Analysis',
+    'Culture & Society',
+    'Technology in Society',
+    'Work & Careers',
+    'Events & Conferences'
+  ]
+};
+
+// Flatten categories for easier reference
+const ALL_CATEGORIES = Object.entries(AVAILABLE_CATEGORIES).flatMap(([section, cats]) => 
+  cats.map(cat => `${section}: ${cat}`)
+);
+
+// RSS Sources (removed category field)
 const RSS_SOURCES = [
-  { id: 'techcrunch', name: 'TechCrunch', url: 'https://techcrunch.com/feed/', category: 'Consumer Tech' },
-  { id: 'ars-technica', name: 'Ars Technica', url: 'https://arstechnica.com/feed/', category: 'Tech' },
-  { id: 'engadget', name: 'Engadget', url: 'https://www.engadget.com/rss.xml', category: 'Tech' },
-  { id: 'venturebeat', name: 'VentureBeat', url: 'https://venturebeat.com/feed/', category: 'Tech' },
-  { id: 'gizmodo', name: 'Gizmodo', url: 'https://gizmodo.com/rss', category: 'Tech' },
-  { id: 'forbes', name: 'Forbes', url: 'https://www.forbes.com/business/feed/', category: 'Business' },
-  { id: 'mashable', name: 'Mashable', url: 'https://mashable.com/feeds/rss/all', category: 'Tech' },
+  { id: 'techcrunch', name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
+  { id: 'ars-technica', name: 'Ars Technica', url: 'https://arstechnica.com/feed/' },
+  { id: 'engadget', name: 'Engadget', url: 'https://www.engadget.com/rss.xml' },
+  { id: 'venturebeat', name: 'VentureBeat', url: 'https://venturebeat.com/feed/' },
+  { id: 'gizmodo', name: 'Gizmodo', url: 'https://gizmodo.com/rss' },
+  { id: 'forbes', name: 'Forbes', url: 'https://www.forbes.com/business/feed/' },
+  { id: 'mashable', name: 'Mashable', url: 'https://mashable.com/feeds/rss/all' },
 ];
 
-// NewsAPI Sources
+// NewsAPI Sources (removed category field)
 const NEWS_SOURCES = [
-  { id: 'techcrunch', name: 'TechCrunch', url: 'techcrunch.com', category: 'tech', trusted: true },
-  { id: 'the-verge', name: 'The Verge', url: 'theverge.com', category: 'tech', trusted: true },
-  { id: 'wired', name: 'Wired', url: 'wired.com', category: 'tech', trusted: true },
-  { id: 'engadget', name: 'Engadget', url: 'engadget.com', category: 'tech', trusted: true },
-  { id: 'ars-technica', name: 'Ars Technica', url: 'arstechnica.com', category: 'tech', trusted: true },
-  { id: 'bloomberg', name: 'Bloomberg', url: 'bloomberg.com', category: 'business', trusted: true },
-  { id: 'forbes', name: 'Forbes', url: 'forbes.com', category: 'business', trusted: true },
-  { id: 'cnbc', name: 'CNBC', url: 'cnbc.com', category: 'business', trusted: true },
-  { id: 'financial-times', name: 'Financial Times', url: 'ft.com', category: 'business', trusted: true },
-  { id: 'business-insider', name: 'Business Insider', url: 'businessinsider.com', category: 'business', trusted: true },
+  { id: 'techcrunch', name: 'TechCrunch', url: 'techcrunch.com', trusted: true },
+  { id: 'the-verge', name: 'The Verge', url: 'theverge.com', trusted: true },
+  { id: 'wired', name: 'Wired', url: 'wired.com', trusted: true },
+  { id: 'engadget', name: 'Engadget', url: 'engadget.com', trusted: true },
+  { id: 'ars-technica', name: 'Ars Technica', url: 'arstechnica.com', trusted: true },
+  { id: 'bloomberg', name: 'Bloomberg', url: 'bloomberg.com', trusted: true },
+  { id: 'forbes', name: 'Forbes', url: 'forbes.com', trusted: true },
+  { id: 'cnbc', name: 'CNBC', url: 'cnbc.com', trusted: true },
+  { id: 'financial-times', name: 'Financial Times', url: 'ft.com', trusted: true },
+  { id: 'business-insider', name: 'Business Insider', url: 'businessinsider.com', trusted: true },
 ];
 
 const SOURCE_IDS = NEWS_SOURCES.map(s => s.id).join(',');
@@ -75,7 +144,7 @@ function parseDate(dateString) {
   }
 }
 
-// RSS Parsing
+// RSS Parsing (removed category assignment)
 function parseRSSXML(xmlText, source) {
   try {
     const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi;
@@ -171,7 +240,6 @@ function parseRSSXML(xmlText, source) {
         id: source.id,
         name: source.name,
       },
-      category: source.category,
     }));
 
   } catch (error) {
@@ -224,7 +292,7 @@ async function fetchAllRSSFeeds() {
   return allArticles;
 }
 
-// Fetch from NewsAPI
+// Fetch from NewsAPI (removed category assignment)
 async function fetchFromNewsAPI() {
   try {
     const url = `${NEWSAPI_ENDPOINT}?apiKey=${NEWSAPI_KEY}&language=en&pageSize=100&sources=${SOURCE_IDS}`;
@@ -247,7 +315,6 @@ async function fetchFromNewsAPI() {
         urlToImage: a.urlToImage,
         publishedAt: a.publishedAt,
         source: { id: source?.id || 'unknown', name: a.source?.name || 'Unknown' },
-        category: 'General',
       };
     });
 
@@ -259,57 +326,103 @@ async function fetchFromNewsAPI() {
   }
 }
 
-// Generate AI Summary
-async function generateAISummary(article) {
+// Generate AI Summary and Categories
+async function generateAISummaryAndCategories(article) {
   try {
     let content = article.description || '';
     if (content.length > MAX_PROMPT_CHARS) {
       content = content.slice(0, MAX_PROMPT_CHARS);
     }
 
+    const categoriesList = ALL_CATEGORIES.join('\n');
+
     const response = await anthropic.messages.create({
       model: 'claude-3-haiku-20240307',
-      max_tokens: 180,
+      max_tokens: 300,
       messages: [{
         role: 'user',
-        content: `Summarize the following news article in 3-4 sentences. Focus on the most important facts, the broader context, and the potential impact or implications. Do not repeat the article title or include generic lines. Write in a clear, engaging, and analytical style.\n\nTitle: ${article.title}\n\n${content}`
+        content: `Analyze this news article and provide:
+1. A 3-4 sentence summary focusing on the most important facts, broader context, and potential impact
+2. Select 1-3 most relevant categories from the list below
+
+Title: ${article.title}
+Content: ${content}
+
+Available categories:
+${categoriesList}
+
+Format your response as:
+SUMMARY: [your summary]
+CATEGORIES: [category1, category2, category3]
+
+Rules for categories:
+- Select minimum 1, maximum 3 categories
+- Use exact category names from the list
+- Choose the most specific and relevant categories
+- Order by relevance (most relevant first)`
       }]
     });
 
-    const summary = response.content[0]?.type === 'text' ? response.content[0].text : '';
-    return summary.trim() || 'Summary not available';
-  } catch (error) {
-    console.error('Error generating AI summary:', error);
+    const responseText = response.content[0]?.type === 'text' ? response.content[0].text : '';
     
-    // Only use Anthropic for summary generation
-    return 'AI summary temporarily unavailable';
+    // Parse the response
+    const summaryMatch = responseText.match(/SUMMARY:\s*([\s\S]*?)(?=CATEGORIES:|$)/);
+    const categoriesMatch = responseText.match(/CATEGORIES:\s*([\s\S]*?)$/);
+    
+    const summary = summaryMatch ? summaryMatch[1].trim() : 'Summary not available';
+    let categories = [];
+    
+    if (categoriesMatch) {
+      const categoriesText = categoriesMatch[1].trim();
+      // Extract categories from the text
+      categories = categoriesText.split(',')
+        .map(cat => cat.trim())
+        .filter(cat => ALL_CATEGORIES.includes(cat))
+        .slice(0, 3); // Ensure max 3 categories
+    }
+    
+    // Fallback to at least one category if none were properly parsed
+    if (categories.length === 0) {
+      categories = ['General: Opinion & Analysis'];
+    }
+    
+    return { summary, categories };
+  } catch (error) {
+    console.error('Error generating AI summary and categories:', error);
+    return {
+      summary: 'AI summary temporarily unavailable',
+      categories: ['General: Opinion & Analysis']
+    };
   }
 }
 
-// Get or create AI summary from Supabase
-async function getOrCreateAISummary(article) {
+// Get or create AI summary and categories from Supabase
+async function getOrCreateAISummaryAndCategories(article) {
   try {
-    // Check if summary already exists
+    // Check if summary and categories already exist
     const { data, error } = await supabase
       .from('article_summaries')
-      .select('ai_summary')
+      .select('ai_summary, category_tags')
       .eq('article_url', article.url)
       .single();
 
-    if (data && data.ai_summary) {
-      return data.ai_summary;
+    if (data && data.ai_summary && data.category_tags && data.category_tags.length > 0) {
+      return {
+        summary: data.ai_summary,
+        categories: data.category_tags
+      };
     }
 
-    // Generate new summary
-    const summary = await generateAISummary(article);
-    return summary;
+    // Generate new summary and categories
+    const result = await generateAISummaryAndCategories(article);
+    return result;
   } catch (error) {
-    console.error('Error with summary cache:', error);
-    return generateAISummary(article);
+    console.error('Error with summary/categories cache:', error);
+    return generateAISummaryAndCategories(article);
   }
 }
 
-// Save article to Supabase
+// Save article to Supabase (updated to include category_tags)
 async function saveArticleToSupabase(article) {
   try {
     const { error } = await supabase
@@ -323,7 +436,9 @@ async function saveArticleToSupabase(article) {
         published_at: article.publishedAt,
         source_id: article.source.id,
         source_name: article.source.name,
-        category: article.category,
+        category_tags: article.categoryTags, // New field
+        // Keep category field for backward compatibility, use first tag's main category
+        category: article.categoryTags[0]?.split(':')[0] || 'General',
       }, { onConflict: 'article_url' });
 
     if (error) {
@@ -442,8 +557,12 @@ async function syncArticles() {
           article.urlToImage = article.urlToImage || TECHCRUNCH_LOGO;
         }
 
-        // Generate or get AI summary
-        article.aiSummary = await getOrCreateAISummary(article);
+        // Generate or get AI summary and categories
+        const { summary, categories } = await getOrCreateAISummaryAndCategories(article);
+        article.aiSummary = summary;
+        article.categoryTags = categories;
+        
+        console.log(`Processed: ${article.title.substring(0, 50)}... | Categories: ${categories.join(', ')}`);
         
         // Save to database
         const saved = await saveArticleToSupabase(article);
