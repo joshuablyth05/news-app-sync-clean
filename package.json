@@ -1,0 +1,19 @@
+{
+  "name": "news-app-sync",
+  "version": "1.0.0",
+  "description": "Automated RSS feed syncing for news app",
+  "main": "sync-articles.js",
+  "scripts": {
+    "sync": "node sync-articles.js",
+    "test": "node test-sync.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.24.0",
+    "@supabase/supabase-js": "^2.43.0",
+    "dotenv": "^16.4.5",
+    "node-fetch": "^2.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
