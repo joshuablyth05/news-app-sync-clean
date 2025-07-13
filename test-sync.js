@@ -59,7 +59,7 @@ async function testDatabaseSchema() {
   console.log('\nChecking database schema...');
   
   try {
-    // Test inserting a dummy article
+    // Test inserting a dummy article with category_tags
     const testArticle = {
       article_url: 'https://test.example.com/' + Date.now(),
       article_title: 'Test Article',
@@ -69,7 +69,8 @@ async function testDatabaseSchema() {
       published_at: new Date().toISOString(),
       source_id: 'test',
       source_name: 'Test Source',
-      category: 'Test'
+      category: 'Tech',
+      category_tags: ['Tech: Artificial Intelligence (AI)', 'Business: Markets & Stocks']
     };
     
     const { data, error } = await supabase
@@ -83,6 +84,7 @@ async function testDatabaseSchema() {
     }
     
     console.log('✅ Database schema is correct');
+    console.log('✅ category_tags column is working');
     
     // Clean up test article
     await supabase
@@ -166,10 +168,36 @@ async function getArticleStats() {
       });
     }
     
+    // Get category distribution
+    const { data: categoryData, error: categoryError } = await supabase
+      .from('article_summaries')
+      .select('category_tags')
+      .not('category_tags', 'is', null);
+    
+    if (!categoryError && categoryData) {
+      const categoryCount = {};
+      categoryData.forEach(row => {
+        if (row.category_tags && Array.isArray(row.category_tags)) {
+          row.category_tags.forEach(tag => {
+            categoryCount[tag] = (categoryCount[tag] || 0) + 1;
+          });
+        }
+      });
+      
+      console.log('\n🏷️  Top categories:');
+      const sortedCategories = Object.entries(categoryCount)
+        .sort(([,a], [,b]) => b - a)
+        .slice(0, 10);
+      
+      sortedCategories.forEach(([category, count]) => {
+        console.log(`   ${category}: ${count}`);
+      });
+    }
+    
     // Get recent articles
     const { data: recentData, error: recentError } = await supabase
       .from('article_summaries')
-      .select('article_title, published_at, source_name')
+      .select('article_title, published_at, source_name, category_tags')
       .order('published_at', { ascending: false })
       .limit(5);
     
@@ -179,6 +207,9 @@ async function getArticleStats() {
         const date = new Date(article.published_at).toLocaleString();
         console.log(`   - ${article.article_title}`);
         console.log(`     ${article.source_name} | ${date}`);
+        if (article.category_tags && article.category_tags.length > 0) {
+          console.log(`     Tags: ${article.category_tags.join(', ')}`);
+        }
       });
     }
   } catch (error) {
