@@ -90,7 +90,7 @@ const ALL_CATEGORIES = Object.entries(AVAILABLE_CATEGORIES).flatMap(([section, c
   cats.map(cat => `${section}: ${cat}`)
 );
 
-// RSS Sources (removed category field)
+// RSS Sources
 const RSS_SOURCES = [
   { id: 'techcrunch', name: 'TechCrunch', url: 'https://techcrunch.com/feed/' },
   { id: 'ars-technica', name: 'Ars Technica', url: 'https://arstechnica.com/feed/' },
@@ -101,12 +101,12 @@ const RSS_SOURCES = [
   { id: 'mashable', name: 'Mashable', url: 'https://mashable.com/feeds/rss/all' },
 ];
 
-// NewsAPI Sources (removed category field)
+// NewsAPI Sources
 const NEWS_SOURCES = [
   { id: 'techcrunch', name: 'TechCrunch', url: 'techcrunch.com', trusted: true },
   { id: 'the-verge', name: 'The Verge', url: 'theverge.com', trusted: true },
   { id: 'wired', name: 'Wired', url: 'wired.com', trusted: true },
-  { id: 'engadget', name: 'Engadget', url: 'engadget.com', trusted: true },
+  { id: 'engadget', name: 'Engladget', url: 'engadget.com', trusted: true },
   { id: 'ars-technica', name: 'Ars Technica', url: 'arstechnica.com', trusted: true },
   { id: 'bloomberg', name: 'Bloomberg', url: 'bloomberg.com', trusted: true },
   { id: 'forbes', name: 'Forbes', url: 'forbes.com', trusted: true },
@@ -144,7 +144,7 @@ function parseDate(dateString) {
   }
 }
 
-// RSS Parsing (removed category assignment)
+// RSS Parsing - UNLIMITED FETCHING (removed slice limit)
 function parseRSSXML(xmlText, source) {
   try {
     const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi;
@@ -229,7 +229,8 @@ function parseRSSXML(xmlText, source) {
       }
     }
 
-    return items.slice(0, 100).map((item, index) => ({
+    // UNLIMITED FETCHING - Return ALL items instead of limiting to 100
+    return items.map((item, index) => ({
       id: item.link || `${item.title}-${index}`,
       title: item.title,
       description: item.description,
@@ -262,7 +263,7 @@ async function fetchRSSFeed(source) {
     console.log(`RSS response length: ${xmlText.length} characters`);
     
     const articles = parseRSSXML(xmlText, source);
-    console.log(`Parsed ${articles.length} articles from ${source.name}`);
+    console.log(`📰 Parsed ${articles.length} articles from ${source.name} (UNLIMITED)`);
     
     return articles;
   } catch (error) {
@@ -271,9 +272,9 @@ async function fetchRSSFeed(source) {
   }
 }
 
-// Fetch all RSS feeds
+// Fetch all RSS feeds with unlimited articles
 async function fetchAllRSSFeeds() {
-  console.log('Fetching all RSS feeds...');
+  console.log('🚀 Fetching ALL RSS feeds with unlimited articles...');
   
   const allArticles = [];
   
@@ -282,17 +283,17 @@ async function fetchAllRSSFeeds() {
       const articles = await fetchRSSFeed(source);
       const filtered = articles.filter(a => !/^test\d*$/i.test(a.title.trim()));
       allArticles.push(...filtered);
-      console.log(`Added ${filtered.length} articles from ${source.name}`);
+      console.log(`✅ Added ${filtered.length} articles from ${source.name}`);
     } catch (error) {
-      console.error(`Error fetching RSS for ${source.name}:`, error);
+      console.error(`❌ Error fetching RSS for ${source.name}:`, error);
     }
   }
   
-  console.log(`Total RSS articles fetched: ${allArticles.length}`);
+  console.log(`🎉 Total RSS articles fetched: ${allArticles.length}`);
   return allArticles;
 }
 
-// Fetch from NewsAPI (removed category assignment)
+// Fetch from NewsAPI (keep existing logic)
 async function fetchFromNewsAPI() {
   try {
     const url = `${NEWSAPI_ENDPOINT}?apiKey=${NEWSAPI_KEY}&language=en&pageSize=100&sources=${SOURCE_IDS}`;
@@ -323,6 +324,30 @@ async function fetchFromNewsAPI() {
   } catch (error) {
     console.error('Error fetching from NewsAPI:', error);
     return [];
+  }
+}
+
+// Get all existing article URLs from database (optimized query)
+async function getExistingArticleUrls() {
+  try {
+    console.log('🔍 Fetching existing article URLs from database...');
+    
+    const { data, error } = await supabase
+      .from('article_summaries')
+      .select('article_url');
+
+    if (error) {
+      console.error('Error fetching existing articles:', error);
+      return new Set();
+    }
+
+    const existingUrls = new Set(data.map(article => article.article_url));
+    console.log(`📊 Found ${existingUrls.size} existing articles in database`);
+    
+    return existingUrls;
+  } catch (error) {
+    console.error('Error getting existing article URLs:', error);
+    return new Set();
   }
 }
 
@@ -422,7 +447,7 @@ async function getOrCreateAISummaryAndCategories(article) {
   }
 }
 
-// Save article to Supabase (updated to include category_tags)
+// Save article to Supabase
 async function saveArticleToSupabase(article) {
   try {
     const { error } = await supabase
@@ -436,7 +461,7 @@ async function saveArticleToSupabase(article) {
         published_at: article.publishedAt,
         source_id: article.source.id,
         source_name: article.source.name,
-        category_tags: article.categoryTags, // New field
+        category_tags: article.categoryTags,
         // Keep category field for backward compatibility, use first tag's main category
         category: article.categoryTags[0]?.split(':')[0] || 'General',
       }, { onConflict: 'article_url' });
@@ -465,10 +490,10 @@ function deduplicateArticles(articles) {
   });
 }
 
-// Cleanup old articles
-async function cleanupOldArticles(currentArticleUrls) {
+// SMART CLEANUP - Only remove articles that don't exist in ANY current RSS feed
+async function intelligentCleanup(currentArticleUrls) {
   try {
-    console.log('Starting cleanup of old articles...');
+    console.log('🧹 Starting intelligent cleanup of outdated articles...');
     
     // Get all stored article URLs
     const { data: storedArticles, error } = await supabase
@@ -483,15 +508,19 @@ async function cleanupOldArticles(currentArticleUrls) {
     const storedUrls = new Set(storedArticles.map(a => a.article_url));
     const urlsToRemove = [];
 
+    // Only remove articles that are in database but NOT in any current RSS feed
     storedUrls.forEach(url => {
       if (!currentArticleUrls.has(url)) {
         urlsToRemove.push(url);
       }
     });
 
-    console.log(`Found ${urlsToRemove.length} outdated articles to remove`);
+    console.log(`📊 Database has ${storedUrls.size} articles`);
+    console.log(`📊 Current feeds have ${currentArticleUrls.size} articles`);
+    console.log(`🗑️  Found ${urlsToRemove.length} outdated articles to remove`);
 
     if (urlsToRemove.length === 0) {
+      console.log('✅ No outdated articles to remove - database is perfectly synced!');
       return { removed: 0, errors: [] };
     }
 
@@ -509,101 +538,114 @@ async function cleanupOldArticles(currentArticleUrls) {
         .in('article_url', batch);
 
       if (error) {
-        console.error(`Error removing batch ${i / batchSize + 1}:`, error);
+        console.error(`❌ Error removing batch ${i / batchSize + 1}:`, error);
         errors.push(error.message);
       } else {
         removedCount += batch.length;
-        console.log(`Removed batch ${i / batchSize + 1} with ${batch.length} articles`);
+        console.log(`✅ Removed batch ${i / batchSize + 1} with ${batch.length} articles`);
       }
     }
 
-    console.log(`Cleanup completed: ${removedCount} articles removed`);
+    console.log(`🎉 Intelligent cleanup completed: ${removedCount} outdated articles removed`);
     return { removed: removedCount, errors };
   } catch (error) {
-    console.error('Error during cleanup:', error);
+    console.error('Error during intelligent cleanup:', error);
     return { removed: 0, errors: [error.message] };
   }
 }
 
-// Main sync function
+// Main sync function with intelligent database comparison
 async function syncArticles() {
-  console.log('Starting article sync process...');
-  console.log(`Time: ${new Date().toISOString()}`);
+  console.log('🚀 Starting UNLIMITED article sync process...');
+  console.log(`⏰ Time: ${new Date().toISOString()}`);
   
   try {
-    // Fetch articles from all sources
+    // Step 1: Get existing articles from database
+    const existingUrls = await getExistingArticleUrls();
+
+    // Step 2: Fetch articles from all sources (unlimited)
     const [rssArticles, newsApiArticles] = await Promise.all([
       fetchAllRSSFeeds(),
       fetchFromNewsAPI(),
     ]);
 
-    console.log(`RSS articles: ${rssArticles.length}, NewsAPI articles: ${newsApiArticles.length}`);
+    console.log(`📊 RSS articles: ${rssArticles.length}, NewsAPI articles: ${newsApiArticles.length}`);
 
-    // Combine and deduplicate
+    // Step 3: Combine and deduplicate
     const allArticles = [...rssArticles, ...newsApiArticles];
     const uniqueArticles = deduplicateArticles(allArticles);
-    console.log(`Total unique articles: ${uniqueArticles.length}`);
+    console.log(`🎯 Total unique articles from feeds: ${uniqueArticles.length}`);
 
-    // Process articles and save to database
+    // Step 4: Find NEW articles (in feeds but not in database)
+    const newArticles = uniqueArticles.filter(article => !existingUrls.has(article.url));
+    console.log(`🆕 Found ${newArticles.length} NEW articles to add to database`);
+    console.log(`💾 Found ${uniqueArticles.length - newArticles.length} existing articles (will be kept)`);
+
+    // Step 5: Process only NEW articles
     let savedCount = 0;
     let errorCount = 0;
-    const currentUrls = new Set();
+    const currentUrls = new Set(uniqueArticles.map(a => a.url));
 
-    for (const article of uniqueArticles) {
-      try {
-        // Special handling for TechCrunch
-        if (article.source.id === 'techcrunch') {
-          article.title = decodeXMLEntities(article.title);
-          article.urlToImage = article.urlToImage || TECHCRUNCH_LOGO;
-        }
+    if (newArticles.length > 0) {
+      console.log('🔄 Processing new articles...');
+      
+      for (const article of newArticles) {
+        try {
+          // Special handling for TechCrunch
+          if (article.source.id === 'techcrunch') {
+            article.title = decodeXMLEntities(article.title);
+            article.urlToImage = article.urlToImage || TECHCRUNCH_LOGO;
+          }
 
-        // Generate or get AI summary and categories
-        const { summary, categories } = await getOrCreateAISummaryAndCategories(article);
-        article.aiSummary = summary;
-        article.categoryTags = categories;
-        
-        console.log(`Processed: ${article.title.substring(0, 50)}... | Categories: ${categories.join(', ')}`);
-        
-        // Save to database
-        const saved = await saveArticleToSupabase(article);
-        if (saved) {
-          savedCount++;
-          currentUrls.add(article.url);
-        } else {
+          // Generate or get AI summary and categories
+          const { summary, categories } = await getOrCreateAISummaryAndCategories(article);
+          article.aiSummary = summary;
+          article.categoryTags = categories;
+          
+          console.log(`✨ Processing NEW: ${article.title.substring(0, 50)}... | Categories: ${categories.join(', ')}`);
+          
+          // Save to database
+          const saved = await saveArticleToSupabase(article);
+          if (saved) {
+            savedCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (error) {
+          console.error(`❌ Error processing article: ${article.title}`, error);
           errorCount++;
         }
-      } catch (error) {
-        console.error(`Error processing article: ${article.title}`, error);
-        errorCount++;
       }
+    } else {
+      console.log('✅ No new articles to process - all articles already exist in database!');
     }
 
-    console.log(`Saved ${savedCount} articles, ${errorCount} errors`);
+    console.log(`💾 Saved ${savedCount} new articles, ${errorCount} errors`);
 
-    // Cleanup old articles
-    const cleanupResult = await cleanupOldArticles(currentUrls);
-    console.log(`Cleanup result: ${cleanupResult.removed} articles removed`);
+    // Step 6: Intelligent cleanup (only remove articles not in any current feed)
+    const cleanupResult = await intelligentCleanup(currentUrls);
 
     // Final summary
-    console.log('\n=== Sync Summary ===');
-    console.log(`Total articles processed: ${uniqueArticles.length}`);
-    console.log(`Articles saved: ${savedCount}`);
-    console.log(`Errors: ${errorCount}`);
-    console.log(`Old articles removed: ${cleanupResult.removed}`);
-    console.log(`Sync completed at: ${new Date().toISOString()}`);
-    console.log('==================\n');
+    console.log('\n🎉 === UNLIMITED SYNC SUMMARY ===');
+    console.log(`📊 Total articles from feeds: ${uniqueArticles.length}`);
+    console.log(`🆕 New articles added: ${savedCount}`);
+    console.log(`💾 Existing articles kept: ${uniqueArticles.length - newArticles.length}`);
+    console.log(`🗑️  Outdated articles removed: ${cleanupResult.removed}`);
+    console.log(`❌ Errors: ${errorCount}`);
+    console.log(`⏰ Sync completed at: ${new Date().toISOString()}`);
+    console.log('================================\n');
 
   } catch (error) {
-    console.error('Fatal error during sync:', error);
+    console.error('💥 Fatal error during sync:', error);
     process.exit(1);
   }
 }
 
 // Run the sync
 syncArticles().then(() => {
-  console.log('Sync process completed successfully');
+  console.log('🎉 Sync process completed successfully');
   process.exit(0);
 }).catch(error => {
-  console.error('Sync process failed:', error);
+  console.error('💥 Sync process failed:', error);
   process.exit(1);
 });
